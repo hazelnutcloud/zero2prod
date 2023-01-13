@@ -2,7 +2,7 @@ use std::{net::TcpListener, vec};
 
 use entity::prelude::Subscriptions;
 use migration::{Migrator, MigratorTrait};
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, EntityTrait, Statement};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, EntityTrait, Statement};
 use zero2prod::{
     config::{get_configuration, DatabaseSettings},
     startup,
@@ -36,18 +36,20 @@ async fn configure_database(config: &DatabaseSettings) -> DatabaseConnection {
         .expect("Connection to DB should be established");
     connection
         .execute(Statement::from_string(
-            sea_orm::DatabaseBackend::Postgres,
-            format!(r#"CREATE DATABASE "{}";"#, config.database_name),
+            DbBackend::Postgres,
+            format!("CREATE DATABASE \"{}\"", config.database_name),
         ))
         .await
         .expect("Database should be created");
-    let connection = Database::connect(&config.connection_string())
+    println!("database name: {}", config.database_name);
+    println!("connection string: {}", config.connection_string());
+    let new_connection = Database::connect(&config.connection_string())
         .await
         .expect("Connection to DB should be established");
-    Migrator::up(&connection, None)
+    Migrator::up(&new_connection, None)
         .await
         .expect("Migration should run");
-    connection
+    new_connection
 }
 
 #[tokio::test]
@@ -68,18 +70,13 @@ async fn health_check_works() {
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
-    let app_address = spawn_app().await.address;
-    let config = get_configuration().expect("Config should load");
-    let connection_string = config.database.connection_string();
-    let connection = Database::connect(connection_string)
-        .await
-        .expect("Connection should be established");
+    let app = spawn_app().await;
 
     let client = reqwest::Client::new();
 
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
     let response = client
-        .post(format!("{}/subscriptions", app_address))
+        .post(format!("{}/subscriptions", app.address))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(body)
         .send()
@@ -89,7 +86,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     assert_eq!(200, response.status().as_u16());
 
     let saved = Subscriptions::find()
-        .one(&connection)
+        .one(&app.db_pool)
         .await
         .expect("Saved subscription should be found")
         .expect("Saved subscription should be present");

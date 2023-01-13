@@ -18,7 +18,6 @@ pub async fn subscribe(
         email: Set(form.email.to_owned()),
         name: Set(form.name.to_owned()),
         subscribed_at: Set(chrono::Utc::now().into()),
-        ..Default::default()
     };
     match new_subscription.insert(connection.get_ref()).await {
         Ok(_) => HttpResponse::Ok(),

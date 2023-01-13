@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:12
+        image: postgres
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -35,13 +35,6 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - name: Migrate database
-        uses: actions-rs/cargo@v1
-        with:
-          command: run
-          args: >
-            --manifest-path ./migrations/Cargo.toml
-            -- up
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
