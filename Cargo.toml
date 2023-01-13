@@ -12,10 +12,22 @@ name = "zero2prod"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[workspace]
+members = [".", "migration", "entity"]
+
 [dependencies]
 actix-web = "4.2.1"
+config = "0.13.3"
+sea-orm = { version = "0.10.6", features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+] }
 serde = { version = "1.0.152", features = ["derive"] }
 tokio = { version = "1.24.1", features = ["macros", "rt-multi-thread"] }
+entity = { path = "./entity" }
+migration = { path = "./migration" }
+uuid = "1.2.2"
+chrono = { version = "0.4.23", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
 reqwest = "0.11.13"
