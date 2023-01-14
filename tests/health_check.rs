@@ -2,11 +2,27 @@ use std::{net::TcpListener, vec};
 
 use entity::prelude::Subscriptions;
 use migration::{Migrator, MigratorTrait};
+use once_cell::sync::Lazy;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, EntityTrait, Statement};
+use secrecy::ExposeSecret;
 use zero2prod::{
     config::{get_configuration, DatabaseSettings},
-    startup,
+    startup, telemetry,
 };
+
+static TRACING: Lazy<()> = Lazy::new(|| {
+    let default_filter_level = "info";
+    let subscriber_name = "zero2prod";
+    if std::env::var("TEST_LOG").is_ok() {
+        let subscriber =
+            telemetry::get_subscriber(subscriber_name, default_filter_level, std::io::stdout);
+        telemetry::init_subscriber(subscriber);
+    } else {
+        let subscriber =
+            telemetry::get_subscriber(subscriber_name, default_filter_level, std::io::sink);
+        telemetry::init_subscriber(subscriber);
+    }
+});
 
 pub struct TestApp {
     pub address: String,
@@ -14,6 +30,8 @@ pub struct TestApp {
 }
 
 async fn spawn_app() -> TestApp {
+    Lazy::force(&TRACING);
+
     let listener = TcpListener::bind("127.0.0.1:0").expect("Listener should bind");
     let port = listener.local_addr().unwrap().port();
     let address = format!("http://127.0.0.1:{}", port);
@@ -31,7 +49,7 @@ async fn spawn_app() -> TestApp {
 }
 
 async fn configure_database(config: &DatabaseSettings) -> DatabaseConnection {
-    let connection = Database::connect(&config.connection_string_without_db())
+    let connection = Database::connect(config.connection_string_without_db().expose_secret())
         .await
         .expect("Connection to DB should be established");
     connection
@@ -41,9 +59,7 @@ async fn configure_database(config: &DatabaseSettings) -> DatabaseConnection {
         ))
         .await
         .expect("Database should be created");
-    println!("database name: {}", config.database_name);
-    println!("connection string: {}", config.connection_string());
-    let new_connection = Database::connect(&config.connection_string())
+    let new_connection = Database::connect(config.connection_string().expose_secret())
         .await
         .expect("Connection to DB should be established");
     Migrator::up(&new_connection, None)
