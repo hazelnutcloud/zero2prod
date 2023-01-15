@@ -1,10 +1,36 @@
-use config::{Config, File, FileFormat};
+use config::{Config, File};
 use secrecy::{ExposeSecret, Secret};
+
+pub enum Environment {
+    Local,
+    Production,
+}
+
+impl Environment {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Environment::Local => "local",
+            Environment::Production => "production",
+        }
+    }
+}
+
+impl std::convert::TryFrom<String> for Environment {
+    type Error = String;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        match s.to_lowercase().as_str() {
+            "local" => Ok(Environment::Local),
+            "production" => Ok(Environment::Production),
+            _ => Err(format!("Unknown environment: {}", s)),
+        }
+    }
+}
 
 #[derive(serde::Deserialize)]
 pub struct Settings {
     pub database: DatabaseSettings,
-    pub application_port: u16,
+    pub application: ApplicationSettings,
 }
 
 #[derive(serde::Deserialize)]
@@ -16,11 +42,27 @@ pub struct DatabaseSettings {
     pub database_name: String,
 }
 
+#[derive(serde::Deserialize)]
+pub struct ApplicationSettings {
+    pub port: u16,
+    pub host: String,
+}
+
 pub fn get_configuration() -> Result<Settings, config::ConfigError> {
+    let base_path = std::env::current_dir().expect("Current directory should exist");
+    let config_path = base_path.join("config");
+
+    let env: Environment = std::env::var("APP_ENV")
+        .unwrap_or_else(|_| "local".into())
+        .try_into()
+        .expect("APP_ENV should be correct environment");
+    let env_filename = format!("{}.yaml", env.as_str());
     let settings = Config::builder()
-        .add_source(File::new("config.yaml", FileFormat::Yaml))
+        .add_source(File::from(config_path.join("base.yaml")))
+        .add_source(File::from(config_path.join(env_filename)))
         .build()?;
-    settings.try_deserialize::<Settings>()
+
+    settings.try_deserialize()
 }
 
 impl DatabaseSettings {

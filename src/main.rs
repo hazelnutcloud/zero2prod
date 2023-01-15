@@ -12,7 +12,7 @@ async fn main() -> std::io::Result<()> {
     let connection = Database::connect(config.database.connection_string().expose_secret())
         .await
         .expect("Connection to DB should be established");
-    let address = format!("127.0.0.1:{}", config.application_port);
+    let address = format!("{}:{}", config.application.host, config.application.port);
     let listener = TcpListener::bind(address)?;
 
     startup::run(listener, connection)?.await
