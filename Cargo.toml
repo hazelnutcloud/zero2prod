@@ -20,6 +20,7 @@ actix-web = "4.2.1"
 config = "0.13.3"
 sea-orm = { version = "0.10.6", features = [
     "sqlx-postgres",
+    "sqlx-sqlite",
     "runtime-tokio-rustls",
 ] }
 serde = { version = "1.0.152", features = ["derive"] }

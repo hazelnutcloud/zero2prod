@@ -1,14 +1,9 @@
-use std::{net::TcpListener, vec};
-
 use entity::prelude::Subscriptions;
 use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, EntityTrait, Statement};
-use secrecy::ExposeSecret;
-use zero2prod::{
-    config::{get_configuration, DatabaseSettings},
-    startup, telemetry,
-};
+use sea_orm::{Database, DatabaseConnection, EntityTrait};
+use std::{net::TcpListener, vec};
+use zero2prod::{startup, telemetry};
 
 static TRACING: Lazy<()> = Lazy::new(|| {
     let default_filter_level = "info";
@@ -36,9 +31,7 @@ async fn spawn_app() -> TestApp {
     let port = listener.local_addr().unwrap().port();
     let address = format!("http://127.0.0.1:{}", port);
 
-    let mut config = get_configuration().expect("Config should load");
-    config.database.database_name = uuid::Uuid::new_v4().to_string();
-    let connection = configure_database(&config.database).await;
+    let connection = configure_database().await;
 
     let server = startup::run(listener, connection.clone()).expect("Run should return server");
     let _ = tokio::spawn(server);
@@ -48,24 +41,14 @@ async fn spawn_app() -> TestApp {
     }
 }
 
-async fn configure_database(config: &DatabaseSettings) -> DatabaseConnection {
-    let connection = Database::connect(config.connection_string_without_db().expose_secret())
+async fn configure_database() -> DatabaseConnection {
+    let connection = Database::connect("sqlite::memory:")
         .await
         .expect("Connection to DB should be established");
-    connection
-        .execute(Statement::from_string(
-            DbBackend::Postgres,
-            format!("CREATE DATABASE \"{}\"", config.database_name),
-        ))
-        .await
-        .expect("Database should be created");
-    let new_connection = Database::connect(config.connection_string().expose_secret())
-        .await
-        .expect("Connection to DB should be established");
-    Migrator::up(&new_connection, None)
+    Migrator::up(&connection, None)
         .await
         .expect("Migration should run");
-    new_connection
+    connection
 }
 
 #[tokio::test]
